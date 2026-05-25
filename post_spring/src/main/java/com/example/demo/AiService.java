@@ -9,6 +9,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Service
@@ -38,10 +41,13 @@ public class AiService {
     }
 
     public Map searchAddress(String keyword) {
-        String url = UriComponentsBuilder.fromUriString(PYTHON_URL + "/search")
-                .queryParam("keyword", keyword)
-                .toUriString();
-        ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+        String decodedKeyword = URLDecoder.decode(keyword, StandardCharsets.UTF_8);
+        URI uri = UriComponentsBuilder.fromUriString(PYTHON_URL + "/search")
+                .queryParam("keyword", decodedKeyword)
+                .build()
+                .encode(StandardCharsets.UTF_8)
+                .toUri();
+        ResponseEntity<Map> response = restTemplate.getForEntity(uri, Map.class);
         return response.getBody();
     }
 }

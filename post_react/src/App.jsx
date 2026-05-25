@@ -49,6 +49,7 @@ function App() {
   const [cameras, setCameras] = useState([]);
   const [selectedCameraId, setSelectedCameraId] = useState("");
   const [activeCameraLabel, setActiveCameraLabel] = useState("");
+  const [capturePreview, setCapturePreview] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [form, setForm] = useState(initialForm);
   const videoRef = useRef(null);
@@ -89,6 +90,7 @@ function App() {
     setCameraReady(true);
     setSelectedCameraId(deviceId || "");
     setActiveCameraLabel(label);
+    setCapturePreview("");
     setResult(null);
   };
 
@@ -153,6 +155,54 @@ function App() {
     return "";
   };
 
+  const waitForVideoFrame = async () => {
+    const video = videoRef.current;
+    if (!video) return false;
+    if (video.videoWidth > 0 && video.videoHeight > 0) return true;
+
+    await new Promise((resolve) => {
+      const timeoutId = window.setTimeout(resolve, 1200);
+      video.onloadedmetadata = () => {
+        window.clearTimeout(timeoutId);
+        resolve();
+      };
+    });
+
+    return video.videoWidth > 0 && video.videoHeight > 0;
+  };
+
+  const createCaptureBlob = async () => {
+    const video = videoRef.current;
+    const hasFrame = await waitForVideoFrame();
+    if (!video || !hasFrame) {
+      throw new Error("카메라 화면이 아직 준비되지 않았습니다. 잠시 후 다시 촬영해 주세요.");
+    }
+
+    const sourceWidth = video.videoWidth;
+    const sourceHeight = video.videoHeight;
+    const cropRatio = 0.13;
+    const cropX = Math.round(sourceWidth * cropRatio);
+    const cropY = Math.round(sourceHeight * cropRatio);
+    const cropWidth = Math.round(sourceWidth * (1 - cropRatio * 2));
+    const cropHeight = Math.round(sourceHeight * (1 - cropRatio * 2));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+    const context = canvas.getContext("2d");
+    context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+    const previewUrl = canvas.toDataURL("image/png");
+    setCapturePreview(previewUrl);
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("촬영 이미지를 만들지 못했습니다."));
+      }, "image/png");
+    });
+  };
+
   const captureAndOcr = async () => {
     if (!videoRef.current || !cameraReady) {
       setResult({ success: false, message: "먼저 카메라를 시작해 주세요." });
@@ -160,35 +210,29 @@ function App() {
     }
 
     setLoading(true);
-    const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
+    try {
+      const blob = await createCaptureBlob();
+      const formData = new FormData();
+      formData.append("file", blob, "capture.png");
 
-    canvas.toBlob(async (blob) => {
-      try {
-        const formData = new FormData();
-        formData.append("file", blob, "capture.png");
+      const response = await fetch(`${API_BASE_URL}/ocr`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await readApiResponse(response);
+      setResult(data);
 
-        const response = await fetch(`${API_BASE_URL}/ocr`, {
-          method: "POST",
-          body: formData,
-        });
-        const data = await readApiResponse(response);
-        setResult(data);
-
-        const address = readResultAddress(data);
-        if (address) applyAddress(address, data.postalCode);
-      } catch (error) {
-        setResult({
-          success: false,
-          message: "OCR 서버와 연결하지 못했습니다.",
-          error: error.message,
-        });
-      } finally {
-        setLoading(false);
-      }
-    }, "image/png");
+      const address = readResultAddress(data);
+      if (address) applyAddress(address, data.postalCode);
+    } catch (error) {
+      setResult({
+        success: false,
+        message: "OCR 서버와 연결하지 못했거나 촬영 이미지 생성에 실패했습니다.",
+        error: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const searchAddress = async () => {
@@ -330,6 +374,13 @@ function App() {
                 {loading ? "인식 중..." : "촬영 및 인식"}
               </button>
             </div>
+
+            {capturePreview && (
+              <div className="capture-preview">
+                <span>OCR 전송 이미지</span>
+                <img src={capturePreview} alt="OCR 서버로 전송한 촬영 이미지" />
+              </div>
+            )}
           </div>
 
           <div className="result-panel">

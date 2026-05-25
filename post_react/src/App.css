@@ -328,6 +328,28 @@ h2 {
   line-height: 1.5;
 }
 
+.capture-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.capture-preview span {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.capture-preview img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
 .scan-guide {
   position: absolute;
   inset: 13%;
