@@ -7,6 +7,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
 
@@ -37,7 +38,9 @@ public class AiService {
     }
 
     public Map searchAddress(String keyword) {
-        String url = PYTHON_URL + "/search?keyword=" + keyword;
+        String url = UriComponentsBuilder.fromUriString(PYTHON_URL + "/search")
+                .queryParam("keyword", keyword)
+                .toUriString();
         ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
         return response.getBody();
     }
